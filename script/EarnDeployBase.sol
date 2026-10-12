@@ -8,6 +8,9 @@ import {VmSafe} from "forge-std/Vm.sol";
 /// @dev Every input comes from `deployments/manifest-<chainId>.json`, so a deployment is reviewed as a data change.
 abstract contract EarnDeployBase is Script {
     uint256 internal constant TESTNET_CHAIN_ID = 5042002;
+    /// @dev Arc's USDC ERC-20 interface, the only asset an Earn test vault may hold.
+    address internal constant USDC = 0x3600000000000000000000000000000000000000;
+    uint8 internal constant USDC_DECIMALS = 6;
 
     error WrongChain(uint256 chainId);
     error NotArcNode(string clientVersion);
@@ -43,9 +46,14 @@ abstract contract EarnDeployBase is Script {
         return true;
     }
 
-    /// @dev This chain's manifest, `deployments/manifest-<chainId>.json`, checked to name this chain.
-    function _manifest() internal view returns (string memory manifest) {
-        manifest = vm.readFile(string.concat("deployments/manifest-", vm.toString(block.chainid), ".json"));
+    /// @dev This chain's manifest, `deployments/manifest-<chainId>.json`.
+    function _manifestPath() internal view returns (string memory) {
+        return string.concat("deployments/manifest-", vm.toString(block.chainid), ".json");
+    }
+
+    /// @dev The manifest at `path`, checked to name this chain.
+    function _readManifest(string memory path) internal view returns (string memory manifest) {
+        manifest = vm.readFile(path);
         if (vm.parseJsonUint(manifest, ".chainId") != block.chainid) revert ManifestMismatch("chainId");
     }
 

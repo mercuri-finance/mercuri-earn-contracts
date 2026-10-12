@@ -3,5 +3,6 @@
   "chainId": 5042002,
   "name": "Mercurifi Test Vault",
   "owner": "0x0000000000000000000000000000000000000000",
+  "seedAssets": 100000000,
   "symbol": "mtvUSDC"
 }

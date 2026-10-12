@@ -13,12 +13,29 @@ adds no contract on mainnet. The evidence below is scaled to that.
 | Classification and powers | Launch: proxies and immutables, documented | Immutable; owner (two-step) can `fund` and `setWithdrawLimit`, cannot move holders' assets | `SECURITY.md`, NatSpec header | Documented | — |
 | Conventions | Launch/Agents: custom errors, interfaces with NatSpec, `^0.8.26`, pinned submodules | Same; events in `ITestLendVault`, `@inheritdoc`, custom errors in the deployment base | `forge fmt --check`, `script/check-natspec.py` (13 ABI entries, 0 failures) | Pass | — |
 | Source identity | `source-manifest.json` per repo | Added | `script/check-local-source.py` | Pass | — |
-| Behaviour | — | Round trip, `fund` raises share price, limit caps `maxWithdraw`/`maxRedeem` and decreases on payout, owner-only, two-step ownership | `test/integration/TestLendVault.t.sol` | 6 pass | — |
-| Fuzz | 512 runs default, 10,000 under `--stress` | `testFuzz_MaxWithdrawNeverExceedsAssets` | `bash script/check-contracts.sh --stress` (seed `0x5042`) | Pass | No invariant suite: a single-owner test vault with no accounting beyond OpenZeppelin's |
-| Deployment script | Manifest-driven, chain and node guards, wiring checks | Same; refuses chains other than 5042002, a zero owner, an asset without code | `test/local/DeployTestLendVault.t.sol` | 4 pass | No loopback fork rehearsal yet: run before the broadcast |
-| Record writer | Writes only from a completed broadcast, never overwrites | Same, with `--self-test` | `script/write-earn-record.py --self-test` | Pass | — |
+| Behaviour | — | Round trip, `fund` raises share price, deposits raise and payouts lower the limit (saturating), redeem at the limit, owner-only, two-step ownership, renounce disabled | `test/integration/TestLendVault.t.sol` | 11 pass | — |
+| Fuzz and invariants | 512 runs default, 10,000 under `--stress`; Agents runs 1,024 × 256 invariants | `testFuzz_MaxWithdrawNeverExceedsAssets`; invariants: limit equals its model, payouts bounded, share price never falls, assets equal the balance | `bash script/check-contracts.sh --stress` (seeds `0x5042`, `0x5042002`): 262,144 calls per invariant, 0 reverts | Pass | — |
+| Deployment script | Manifest-driven, chain and node guards, wiring checks | Same; refuses chains other than 5042002, a zero owner, any asset but Arc's 6-decimal USDC, a zero seed; seeds the vault in the same broadcast | `test/local/DeployTestLendVault.t.sol` (6 pass); loopback Anvil rehearsal at chain 5042002 (deploy, approve, seed: 3 transactions, all status 1) | Pass | Rehearse against an Anvil fork of Arc testnet before the broadcast |
+| Record writer | Writes only from a completed broadcast, never overwrites | Same; links every receipt to its transaction, pins the asset, verifies HEAD and a clean tree, writes EIP-55 addresses, and checks the deployment on Arc read-only (refuses an Anvil node) | `--self-test`; the rehearsal's real broadcast file accepted, then refused on chain as Anvil | Pass | — |
 | Gas | `.gas-snapshot` checked | Added | `forge snapshot --check` | Pass | — |
-| Static analysis | Slither 0.11.3 baseline in Agents | Not run | — | Pending | Run Slither before a broadcast |
-| Independent review | Launch: external review history | AI-assisted whole-branch review of Earn phase 1 | Earn phase 1 final review (backend, web, vault) | No vault findings | Not an audit by a security firm |
+| Static analysis | Slither 0.11.3 baseline in Agents | Slither 0.11.3, `lib`, `test` and `script` filtered | 0 results across 100 detectors | Pass | Not yet wired into `check-contracts.sh` |
+| Independent review | Launch: external review history | AI-assisted security audit of the vault and tooling (13 October 2026) | Findings and fixes below | 4 Low, 8 Info; all fixed or documented | Not an audit by a security firm |
 
 The deployment remains unauthorized: the manifest's owner is unset and a broadcast needs the owner's explicit go.
+
+## Audit findings (13 October 2026) and their resolution
+
+| ID | Finding | Resolution |
+| --- | --- | --- |
+| L-01 | Depositing then withdrawing used up the global limit at no cost | Deposits add to a set limit (saturating); `test_DepositRaisesTheLimit`, invariant `LimitMatchesTheModel` |
+| L-02 | A donation moves the share price the backend reads | The deployment seeds the vault in the same broadcast; the backend alarms on share-price jumps |
+| L-03 | Renouncing ownership with a zero limit froze holders' assets | `renounceOwnership` reverts `RenounceDisabled`; `test_RenounceIsDisabled` |
+| L-04 | A local Anvil rehearsal produced a record indistinguishable from a deployment | The writer checks the deployment on Arc and refuses a non-Arc node |
+| I-01 | The deployment test depended on the committed zero owner | Tests read fixtures in `test/fixtures/` |
+| I-02 | Asset and decimals not pinned | The script and the writer require Arc USDC; the script requires 6 decimals |
+| I-03 | Writer: receipts not linked, revision unchecked, mixed casing | Receipts matched by hash; HEAD of a clean tree unless `--allow-unverified-revision`; EIP-55 addresses |
+| I-04 | Thin test evidence | Redeem-at-limit test and the invariant campaign under `--stress` |
+| I-05 | NatSpec overstated the limit model and omitted the freeze power | Rewritten; the freeze power is stated |
+| I-06 | Max deposit left nothing for gas (web app) | The web app keeps Launch's 0.03 USDC gas reserve on a USDC Max deposit |
+| I-07 | `setWithdrawLimit` sets an absolute value | Documented: it is the owner's own bookkeeping on a test vault |
+| I-08 | The node guard admits a remote Anvil | The writer refuses any non-Arc node, so no record can come from one |

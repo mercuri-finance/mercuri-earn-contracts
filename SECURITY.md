@@ -23,12 +23,13 @@ key.
 
 | Component | Mutability | Who controls what |
 | --- | --- | --- |
-| `TestLendVault` | Immutable: no proxy, upgrade, delegatecall or selfdestruct | Holders deposit, withdraw and redeem their own shares. The owner (two-step transfer) can add assets with `fund` and cap payouts with `setWithdrawLimit`; it has no function that moves holders' assets. |
+| `TestLendVault` | Immutable: no proxy, upgrade, delegatecall or selfdestruct | Holders deposit, withdraw and redeem their own shares. The owner (two-step transfer, never renounceable) can add assets with `fund` and set the withdraw limit with `setWithdrawLimit`; it has no function that moves holders' assets, but a zero limit freezes every withdrawal until it raises the limit again. Deposits add to a set limit; payouts take from it. Anyone can donate USDC and move the share price, which is why the vault is seeded at deployment and Earn's backend raises an alarm on share-price jumps. |
 
 ## Pause and recovery
 
 There is no pause. The owner can set the withdraw limit to zero, which stops every withdrawal; that simulates a fully
-lent-out vault and is the point of the contract on testnet. Raising the limit restores withdrawals.
+lent-out vault and is the point of the contract on testnet. Raising the limit restores withdrawals. Ownership cannot be
+renounced, so there is always an owner who can.
 
 ## Replacement
 

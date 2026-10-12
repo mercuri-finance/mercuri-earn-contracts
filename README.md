@@ -41,8 +41,10 @@ Earn's contracts live in their own repository, apart from the Launch, Trade and 
 
 Nothing is deployed yet. The testnet deployment inputs are in
 [`deployments/manifest-5042002.json`](deployments/manifest-5042002.json); its owner is unset, and the deployment
-script refuses to run until it names one. The record `deployments/5042002.json` is written only from a completed
-broadcast by [`script/write-earn-record.py`](script/write-earn-record.py).
+script refuses to run until it names one. The script deploys the vault and deposits the manifest's `seedAssets` for the
+owner in the same broadcast, so no donation can land on an empty vault first. The record `deployments/5042002.json` is
+written only from a completed broadcast by [`script/write-earn-record.py`](script/write-earn-record.py), which also
+checks the deployment on Arc itself and refuses a local rehearsal.
 
 | Contract | Network | Address | Mutability |
 | --- | --- | --- | --- |
@@ -55,8 +57,9 @@ Nothing in this repository is deployed to Arc mainnet, and the deployment script
 1. A wallet approves the vault for an exact amount of USDC and calls `deposit`, receiving vault shares.
 2. The owner adds USDC with `fund`, without minting shares, so every share is worth more: that is the rate the Earn
    backend reads from the share price.
-3. The owner can cap what the vault pays out with `setWithdrawLimit`, as a mostly-lent-out lending vault would; every
-   payout lowers the remaining limit, and `maxWithdraw`/`maxRedeem` report it.
+3. The owner can cap what the vault pays out with `setWithdrawLimit`, as a mostly-lent-out lending vault would. The
+   limit then behaves like idle liquidity: deposits add to it, payouts take from it, and `maxWithdraw`/`maxRedeem`
+   report it.
 4. A holder withdraws or redeems up to that limit.
 
 ## Contracts
@@ -73,7 +76,8 @@ Nothing in this repository is deployed to Arc mainnet, and the deployment script
 | Asset | Arc testnet USDC, `0x3600000000000000000000000000000000000000`, 6 decimals | Manifest, at deployment |
 | Share decimals | 12 (asset decimals plus a 6-decimal offset) | Code |
 | Withdraw limit | `type(uint256).max` (none) at deployment | Owner, `setWithdrawLimit` |
-| Owner | The manifest's `owner` | Manifest; two-step transfer |
+| Owner | The manifest's `owner` | Manifest; two-step transfer; cannot be renounced |
+| Seed | The manifest's `seedAssets`, deposited for the owner at deployment | Manifest |
 
 ## Events
 
@@ -96,7 +100,8 @@ bash script/check-contracts.sh
 optimizer runs for `src/**`, no metadata hash. [`lib-versions.md`](lib-versions.md) records every pin.
 
 The gate checks the source manifest, formatting, NatSpec and the record writer's offline self-test, then runs every
-test with seed `0x5042` and the gas snapshot. `--stress` adds a 10,000-run fuzz pass.
+test with seed `0x5042` and the gas snapshot. `--stress` adds a 10,000-run fuzz pass and the vault's invariant
+campaign (1,024 runs at depth 256).
 
 A dry run of the deployment, with no `--broadcast`, against Arc's public RPC:
 
@@ -110,7 +115,7 @@ forge script script/DeployTestLendVault.s.sol --rpc-url https://rpc.testnet.arc.
 | --- | --- |
 | Scope | Arc testnet only. The vault holds testnet USDC, which has no value. |
 | Mutability | Immutable: no proxy, upgrade or rescue path. |
-| Owner | Can add assets and cap payouts; cannot move holders' assets. A zero limit stops every withdrawal, by design. What each role can do: [`SECURITY.md`](SECURITY.md). |
+| Owner | Can add assets and cap payouts; cannot move holders' assets. A zero limit stops every withdrawal until the owner raises it, by design, so ownership can never be renounced. What each role can do: [`SECURITY.md`](SECURITY.md). |
 
 The vault was reviewed with the rest of Earn phase 1; the report is in [`docs/reports/`](docs/reports). This was an
 AI-assisted review, not an audit by a security firm. To report a vulnerability, see [`SECURITY.md`](SECURITY.md).

@@ -65,6 +65,67 @@ contract TestLendVaultTest is Test {
         assertEq(vault.availableAssets(), 0);
     }
 
+    /// A deposit adds to the limit, as new idle liquidity would, so depositing and withdrawing the same amount cannot
+    /// use up other holders' limit.
+    function test_DepositRaisesTheLimit() public {
+        address victim = makeAddr("victim");
+        usdc.mint(victim, 100e6);
+        vm.startPrank(victim);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(100e6, victim);
+        vm.stopPrank();
+        vm.prank(owner);
+        vault.setWithdrawLimit(10e6);
+
+        vm.prank(user);
+        vault.deposit(10e6, user);
+        assertEq(vault.withdrawLimit(), 20e6);
+        uint256 max = vault.maxWithdraw(user);
+        vm.prank(user);
+        vault.withdraw(max, user, user);
+
+        assertEq(vault.maxWithdraw(victim), 10e6);
+    }
+
+    /// A limit near the top of the range saturates at no limit rather than making deposits revert.
+    function test_DepositSaturatesTheLimit() public {
+        vm.prank(owner);
+        vault.setWithdrawLimit(type(uint256).max - 1);
+        vm.prank(user);
+        vault.deposit(10e6, user);
+        assertEq(vault.withdrawLimit(), type(uint256).max);
+    }
+
+    /// No limit (the default) stays no limit after deposits.
+    function test_DepositKeepsNoLimit() public {
+        vm.prank(user);
+        vault.deposit(100e6, user);
+        assertEq(vault.withdrawLimit(), type(uint256).max);
+    }
+
+    /// Redeeming the maximum while the limit binds pays exactly what the limit allowed, and the limit reaches zero.
+    function test_RedeemAtTheLimit() public {
+        vm.prank(user);
+        vault.deposit(100e6, user);
+        vm.prank(owner);
+        vault.setWithdrawLimit(10e6);
+        uint256 before = usdc.balanceOf(user);
+        uint256 shares = vault.maxRedeem(user);
+        vm.prank(user);
+        vault.redeem(shares, user, user);
+        assertLe(usdc.balanceOf(user) - before, 10e6);
+        assertEq(vault.withdrawLimit(), 10e6 - (usdc.balanceOf(user) - before));
+        assertEq(vault.maxRedeem(user), vault.convertToShares(vault.availableAssets()));
+    }
+
+    /// Ownership cannot be renounced: with a zero limit and no owner, holders' assets would be frozen for good.
+    function test_RenounceIsDisabled() public {
+        vm.prank(owner);
+        vm.expectRevert(ITestLendVault.RenounceDisabled.selector);
+        vault.renounceOwnership();
+        assertEq(vault.owner(), owner);
+    }
+
     /// Only the owner can fund or set the limit.
     function test_OnlyOwnerFundsAndLimits() public {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));

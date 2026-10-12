@@ -14,9 +14,11 @@ import {ITestLendVault} from "./interfaces/ITestLendVault.sol";
 
 /// @notice Arc testnet only: a plain ERC-4626 vault over USDC that stands in for a lending venue, because Arc testnet
 ///         has no Morpho or Aave. It lends nothing and must never be deployed to mainnet.
-/// @dev Immutable; no proxy and no upgrade path. The owner (two-step transfer) can only add assets (`fund`) and cap
-///      payouts (`setWithdrawLimit`); it cannot move holders' assets. A zero limit stops every withdrawal, which is
-///      the point of simulating a fully lent-out vault. Replacement is a new deployment and a registry change.
+/// @dev Immutable; no proxy and no upgrade path. The owner (two-step transfer, never renounceable) can only add assets
+///      (`fund`) and set the withdraw limit (`setWithdrawLimit`); it cannot move holders' assets, but a zero limit
+///      stops every withdrawal until the owner raises it again, which is the point of simulating a fully lent-out
+///      vault. Deposits add to the limit and payouts take from it, so the limit behaves like the idle liquidity of a
+///      lending pool. Replacement is a new deployment and a registry change.
 contract TestLendVault is ERC4626, Ownable2Step, ITestLendVault {
     using SafeERC20 for IERC20;
 
@@ -63,6 +65,21 @@ contract TestLendVault is ERC4626, Ownable2Step, ITestLendVault {
     /// @return The shares `owner_` can redeem now.
     function maxRedeem(address owner_) public view override(ERC4626, IERC4626) returns (uint256) {
         return Math.min(super.maxRedeem(owner_), convertToShares(availableAssets()));
+    }
+
+    /// @notice Disabled: with a zero withdraw limit and no owner, holders' assets would be frozen for good.
+    function renounceOwnership() public pure override {
+        revert RenounceDisabled();
+    }
+
+    /// @dev Every deposit adds to a set limit, as new idle liquidity would; no limit stays no limit, and a limit that
+    ///      would pass the top of the range saturates there instead of making the deposit revert.
+    function _deposit(address caller, address receiver, uint256 assets, uint256 shares) internal override {
+        uint256 limit = withdrawLimit;
+        if (limit != type(uint256).max) {
+            withdrawLimit = assets > type(uint256).max - limit ? type(uint256).max : limit + assets;
+        }
+        super._deposit(caller, receiver, assets, shares);
     }
 
     /// @dev Every payout lowers the remaining limit, so the limit behaves like idle liquidity.

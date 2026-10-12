@@ -7,6 +7,10 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 /// @dev Arc testnet only. The vault lends nothing: the owner simulates what borrowers would pay with `fund` and a
 ///      mostly-lent-out vault with `setWithdrawLimit`.
 interface ITestLendVault is IERC4626 {
+    /// @notice Ownership cannot be renounced: with a zero withdraw limit and no owner, holders' assets would be frozen
+    ///         for good.
+    error RenounceDisabled();
+
     /// @notice The owner added assets without minting shares, raising the value of every share.
     /// @param assets The assets added, in the asset's base units.
     event Funded(uint256 assets);

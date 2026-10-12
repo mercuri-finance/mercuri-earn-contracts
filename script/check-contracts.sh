@@ -2,7 +2,7 @@
 # Earn candidate checks. Local only: no .env loading, signing or broadcasting.
 #
 #   bash script/check-contracts.sh            # the gate
-#   bash script/check-contracts.sh --stress   # plus the 10,000-run fuzz campaign
+#   bash script/check-contracts.sh --stress   # plus the 10,000-run fuzz pass and the deep invariant campaign
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -26,5 +26,13 @@ forge test --fuzz-seed 0x5042
 forge snapshot --check --no-match-contract 'Fork|Invariant' --no-match-test '^testFuzz_' --fuzz-seed 0x5042
 
 if [[ ${1:-} == "--stress" ]]; then
-  FOUNDRY_FUZZ_RUNS=10000 forge test --fuzz-seed 0x5042
+  # Every invariant suite runs in the deep campaign below, so the 10,000-run fuzz step leaves it out.
+  FOUNDRY_FUZZ_RUNS=10000 forge test --no-match-contract 'InvariantsTest' --fuzz-seed 0x5042
+  # Vault invariants, 1,024 runs at depth 256, their own counterexample directory.
+  campaign_dir=$(mktemp -d -t mercuri-earn-invariant)
+  echo "Earn invariant counterexamples, if any: $campaign_dir"
+  FOUNDRY_INVARIANT_RUNS=1024 FOUNDRY_INVARIANT_DEPTH=256 \
+    FOUNDRY_INVARIANT_FAIL_ON_REVERT=true \
+    FOUNDRY_INVARIANT_FAILURE_PERSIST_DIR="$campaign_dir" \
+    forge test --match-path 'test/invariant/TestLendVaultInvariants.t.sol' --fuzz-seed 0x5042002
 fi

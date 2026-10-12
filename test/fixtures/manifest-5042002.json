@@ -1,0 +1,8 @@
+{
+  "asset": "0x3600000000000000000000000000000000000000",
+  "chainId": 5042002,
+  "name": "Mercurifi Test Vault",
+  "owner": "0x00000000000000000000000000000000000000A1",
+  "seedAssets": 100000000,
+  "symbol": "mtvUSDC"
+}
