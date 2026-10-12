@@ -1,0 +1,7 @@
+{
+  "algorithm": "sha256",
+  "sources": {
+    "src/TestLendVault.sol": "8f28227e73857ab110a9e42cf59d33357bd3e89b6248ac5dbe28d88ef9a22014",
+    "src/interfaces/ITestLendVault.sol": "67b7430ea4fa3057d719e4b9ce7da086798ca430ca0edb98e8ce1adf1b1baf8b"
+  }
+}

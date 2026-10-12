@@ -1,4 +1,8 @@
 out/
 cache/
-broadcast/*/31337/
+broadcast/
+test-export/
+__pycache__/
+.env
+.env.*
 .superpowers/
