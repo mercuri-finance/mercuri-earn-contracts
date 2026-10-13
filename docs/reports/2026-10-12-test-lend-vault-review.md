@@ -39,3 +39,14 @@ The deployment remains unauthorized: the manifest's owner is unset and a broadca
 | I-06 | Max deposit left nothing for gas (web app) | The web app keeps Launch's 0.03 USDC gas reserve on a USDC Max deposit |
 | I-07 | `setWithdrawLimit` sets an absolute value | Documented: it is the owner's own bookkeeping on a test vault |
 | I-08 | The node guard admits a remote Anvil | The writer refuses any non-Arc node, so no record can come from one |
+
+## Testnet deployment (13 Oct 2026)
+
+| Item | Value |
+| --- | --- |
+| Vault | `0x830AEC6958cdD2f74A5EFC415E03aeDDD736309f`, block 66952177, tx `0x7340f6d40cefb776453050f584aa2a7eb3f12ee4a37b9e0b130ce379a9f67aed` |
+| Source | `732949a6f0a5358a11384cb587f388dbd3d0bde2`; runtime code equals the local build with immutables masked (4,745 bytes) |
+| Owner | Launch testnet timelock `0x41129B5215cA24b29a4cABcaE26d3569744DEe2E` |
+| Seed | 10 USDC by `seed-test-lend-vault.sh` straight after; `totalAssets` 10,000,000, owner shares 10,000,000,000,000 |
+| Record | `deployments/5042002.json`, written by `write-earn-record.py`, checked on Arc |
+

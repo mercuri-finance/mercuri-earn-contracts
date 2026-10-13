@@ -39,7 +39,7 @@ Earn's contracts live in their own repository, apart from the Launch, Trade and 
 
 ## Deployment
 
-Nothing is deployed yet. The testnet deployment inputs are in
+The test vault is deployed on Arc testnet only; its record is [`deployments/5042002.json`](deployments/5042002.json). The testnet deployment inputs are in
 [`deployments/manifest-5042002.json`](deployments/manifest-5042002.json). Its owner is the Launch testnet
 timelock, as for the Agent Accounts testnet admin, and its seed is 10 USDC. Deployment is two steps from the same
 signer. Forge runs a script in its own EVM, which cannot execute Arc's USDC precompiles, so the script deploys the vault
@@ -59,7 +59,7 @@ local rehearsal and refuses a vault that is not seeded.
 
 | Contract | Network | Address | Mutability |
 | --- | --- | --- | --- |
-| `TestLendVault` | Arc testnet | not deployed | Immutable |
+| `TestLendVault` | Arc testnet | [`0x830AEC6958cdD2f74A5EFC415E03aeDDD736309f`](https://explorer.testnet.arc.io/address/0x830AEC6958cdD2f74A5EFC415E03aeDDD736309f) (block 66952177) | Immutable |
 
 Nothing in this repository is deployed to Arc mainnet, and the deployment script refuses mainnet.
 

@@ -1,0 +1,14 @@
+{
+  "asset": "0x3600000000000000000000000000000000000000",
+  "chainId": 5042002,
+  "deployBlock": 66952177,
+  "deployTx": "0x7340f6d40cefb776453050f584aa2a7eb3f12ee4a37b9e0b130ce379a9f67aed",
+  "deployer": "0xAEE533aa42F300b9b0d81446b7a92c4428Df4F8E",
+  "name": "Mercurifi Test Vault",
+  "owner": "0x41129B5215cA24b29a4cABcaE26d3569744DEe2E",
+  "seedAssets": 10000000,
+  "sourceRevision": "732949a6f0a5358a11384cb587f388dbd3d0bde2",
+  "symbol": "mtvUSDC",
+  "testLendVault": "0x830AEC6958cdD2f74A5EFC415E03aeDDD736309f",
+  "version": "0.1.0-testnet"
+}
