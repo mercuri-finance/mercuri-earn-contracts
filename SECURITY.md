@@ -23,7 +23,7 @@ key.
 
 | Component | Mutability | Who controls what |
 | --- | --- | --- |
-| `TestLendVault` | Immutable: no proxy, upgrade, delegatecall or selfdestruct | Holders deposit, withdraw and redeem their own shares. The owner (two-step transfer, never renounceable) can add assets with `fund` and set the withdraw limit with `setWithdrawLimit`; it has no function that moves holders' assets, but a zero limit freezes every withdrawal until it raises the limit again. Deposits add to a set limit; payouts take from it. Anyone can donate USDC and move the share price, which is why the vault is seeded at deployment and Earn's backend raises an alarm on share-price jumps. |
+| `TestLendVault` | Immutable: no proxy, upgrade, delegatecall or selfdestruct | Holders deposit, withdraw and redeem their own shares. The owner (two-step transfer, never renounceable) can add assets with `fund` and set the withdraw limit with `setWithdrawLimit`; it has no function that moves holders' assets, but a zero limit freezes every withdrawal until it raises the limit again. Deposits add to a set limit; payouts take from it. Anyone can donate USDC and move the share price, which is why the vault is seeded straight after deployment and Earn's backend raises an alarm on share-price jumps. |
 
 ## Pause and recovery
 

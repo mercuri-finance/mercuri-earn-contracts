@@ -62,16 +62,16 @@ contract DeployTestLendVaultTest is Test {
         script.requireArcOrAnvilNode(bytes("geth/v1.14"));
     }
 
-    /// With a complete manifest the script deploys the vault, wires it as named and seeds it in the same broadcast, so
-    /// no donation can land on an empty vault before its first deposit.
-    function test_DeploysAndSeedsFromTheManifest() public {
+    /// With a complete manifest the script deploys the vault and wires it as named, and moves no USDC: forge runs a
+    /// script in its own EVM, which cannot execute Arc's USDC precompiles, so the seed deposit is sent with `cast`
+    /// right after and `write-earn-record.py` refuses an unseeded vault.
+    function test_DeploysFromTheManifestWithoutMovingUsdc() public {
         _arcTestnetWithUsdc();
-        MockUsdc(USDC).mint(DEFAULT_SENDER, 100e6);
         TestLendVault vault = script.runWith("test/fixtures/manifest-5042002.json");
         assertEq(vault.asset(), USDC);
         assertEq(vault.owner(), FIXTURE_OWNER);
-        assertEq(vault.totalAssets(), 100e6);
-        assertEq(vault.balanceOf(FIXTURE_OWNER), vault.convertToShares(100e6));
+        assertEq(vault.withdrawLimit(), type(uint256).max);
+        assertEq(vault.totalAssets(), 0);
     }
 
     /// The script refuses an asset other than Arc's USDC.

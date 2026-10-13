@@ -41,10 +41,21 @@ Earn's contracts live in their own repository, apart from the Launch, Trade and 
 
 Nothing is deployed yet. The testnet deployment inputs are in
 [`deployments/manifest-5042002.json`](deployments/manifest-5042002.json). Its owner is the Launch testnet
-timelock, as for the Agent Accounts testnet admin, and its seed is 10 USDC. The script deploys the vault and deposits the manifest's `seedAssets` for the
-owner in the same broadcast, so no donation can land on an empty vault first. The record `deployments/5042002.json` is
-written only from a completed broadcast by [`script/write-earn-record.py`](script/write-earn-record.py), which also
-checks the deployment on Arc itself and refuses a local rehearsal.
+timelock, as for the Agent Accounts testnet admin, and its seed is 10 USDC. Deployment is two steps from the same
+signer. Forge runs a script in its own EVM, which cannot execute Arc's USDC precompiles, so the script deploys the vault
+and moves no USDC; [`script/seed-test-lend-vault.sh`](script/seed-test-lend-vault.sh) then approves and deposits the
+manifest's `seedAssets` for the owner with `cast send`, straight after:
+
+```sh
+forge script script/DeployTestLendVault.s.sol --rpc-url https://rpc.testnet.arc.io --broadcast \
+  --account <keystore> --sender <deployer>
+bash script/seed-test-lend-vault.sh --account <keystore>
+python3 script/write-earn-record.py --broadcast broadcast/DeployTestLendVault.s.sol/5042002/run-latest.json
+```
+
+The record `deployments/5042002.json` is written only from a completed broadcast by
+[`script/write-earn-record.py`](script/write-earn-record.py), which also checks the deployment on Arc itself, refuses a
+local rehearsal and refuses a vault that is not seeded.
 
 | Contract | Network | Address | Mutability |
 | --- | --- | --- | --- |

@@ -10,9 +10,10 @@ import {EarnDeployBase} from "./EarnDeployBase.sol";
 
 /// @notice Deploys Earn's test vault on Arc testnet from `deployments/manifest-5042002.json`.
 /// @dev Refuses every other chain, a zero owner and any asset but Arc's six-decimal USDC, checks the deployed vault's
-///      wiring, and deposits the manifest's `seedAssets` for the owner in the same broadcast, so no donation can land
-///      on an empty vault and set its share scale. The broadcaster must hold the seed. `write-earn-record.py` writes
-///      the deployment record from the completed broadcast.
+///      wiring and a zero seed. It moves no USDC: forge runs a script in its own EVM, which cannot execute Arc's USDC
+///      precompiles, so the deployer seeds the vault with the manifest's `seedAssets` right after, by `cast send`
+///      (README, Deployment). `write-earn-record.py` writes the record from the completed broadcast and refuses a vault
+///      that is not seeded.
 contract DeployTestLendVault is EarnDeployBase {
     /// @notice Deploys the vault named by this chain's manifest.
     /// @return vault The deployed vault.
@@ -36,14 +37,11 @@ contract DeployTestLendVault is EarnDeployBase {
         vault = new TestLendVault(
             IERC20(asset), vm.parseJsonString(manifest, ".name"), vm.parseJsonString(manifest, ".symbol"), owner
         );
-        IERC20(asset).approve(address(vault), seed);
-        vault.deposit(seed, owner);
         vm.stopBroadcast();
 
         if (vault.asset() != asset) revert DeploymentMismatch("asset");
         if (vault.owner() != owner) revert DeploymentMismatch("owner");
         if (vault.withdrawLimit() != type(uint256).max) revert DeploymentMismatch("withdrawLimit");
-        if (vault.totalAssets() != seed || vault.balanceOf(owner) == 0) revert DeploymentMismatch("seed");
         console2.log("TestLendVault", address(vault), "block", block.number);
     }
 }

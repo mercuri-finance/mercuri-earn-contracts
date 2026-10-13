@@ -7,12 +7,12 @@ and blocks as integers): testLendVault, deployBlock, deployer, the manifest inpu
 and sourceRevision.
 
 It only ever writes from a broadcast that completed: forge's `run-latest.json` with no pending transaction, exactly
-one deployment (TestLendVault) as a CREATE followed by the seed's approve and deposit, every transaction with its own
-receipt (matched by hash) of status 1, the CREATE's receipt naming the same contract address, the broadcast's chain
+exactly one transaction, the CREATE of TestLendVault, with its own receipt (matched by hash) of status 1, the CREATE's receipt naming the same contract address, the broadcast's chain
 equal to the manifest's, the asset Arc's USDC, and constructor arguments equal to the manifest's. It then checks the
 chain itself, read-only over `--rpc`: the node must be an Arc node (not Anvil, so a rehearsal never becomes a record),
-the deployment receipt must be on chain with status 1, and the vault must have code and report the manifest's asset and
-owner. Anything else is refused and nothing is written. A dry run (`dry-run/`, no receipts) is refused.
+the deployment receipt must be on chain with status 1, the vault must have code and report the manifest's asset and
+owner, and it must be seeded: `totalAssets()` at least the manifest's `seedAssets` and the owner holding shares. Forge
+cannot run Arc's USDC precompiles, so the seed is sent by `cast` after the broadcast (README, Deployment). Anything else is refused and nothing is written. A dry run (`dry-run/`, no receipts) is refused.
 
 The source revision is HEAD, which must have no uncommitted changes under src/, script/, deployments/ or foundry.toml;
 `--allow-unverified-revision` takes a full SHA as given, for a record written from another checkout, to be reviewed by
@@ -44,6 +44,8 @@ DEFAULT_RPC = 'https://rpc.testnet.arc.io'
 TX_HASH = re.compile(r'^0x[0-9a-fA-F]{64}$')
 SEL_ASSET = '0x38d52e0f'  # asset()
 SEL_OWNER = '0x8da5cb5b'  # owner()
+SEL_TOTAL_ASSETS = '0x01e1d114'  # totalAssets()
+SEL_BALANCE_OF = '0x70a08231'  # balanceOf(address)
 SHA = re.compile(r'^[0-9a-f]{40}$')
 ADDRESS = re.compile(r'^0x[0-9a-fA-F]{40}$')
 
@@ -78,8 +80,8 @@ def build_record(broadcast, manifest, source_revision, to_checksum=checksum):
         raise Refused(f"broadcast chain {broadcast.get('chain')} != manifest chainId {manifest['chainId']}")
     transactions = broadcast.get('transactions', [])
     creates = [t for t in transactions if t.get('transactionType') == 'CREATE']
-    if len(creates) != 1 or creates[0].get('contractName') != CONTRACT or transactions[0] is not creates[0]:
-        raise Refused(f'expected exactly one CREATE of {CONTRACT}, first')
+    if len(transactions) != 1 or len(creates) != 1 or creates[0].get('contractName') != CONTRACT:
+        raise Refused(f'expected exactly one transaction, the CREATE of {CONTRACT}')
     receipts = broadcast.get('receipts', [])
     if len(receipts) != len(transactions):
         raise Refused('expected one receipt per transaction (a dry run has none)')
@@ -149,6 +151,13 @@ def verify_on_chain(record, call):
         word = call('eth_call', [{'to': vault, 'data': selector}, 'latest'])
         if len(word) != 66 or '0x' + word[-40:].lower() != record[key].lower():
             raise Refused(f'on-chain {key} differs from the record')
+    total = _int(call('eth_call', [{'to': vault, 'data': SEL_TOTAL_ASSETS}, 'latest']))
+    if total < record['seedAssets']:
+        raise Refused(f"the vault is not seeded: totalAssets {total} < seedAssets {record['seedAssets']}")
+    shares = _int(call('eth_call', [{'to': vault, 'data': SEL_BALANCE_OF + '0' * 24 + record['owner'][2:].lower()},
+                                    'latest']))
+    if shares == 0:
+        raise Refused('the owner holds no shares: the seed was not deposited for the owner')
 
 
 def head_revision():
@@ -182,15 +191,13 @@ def self_test():
     manifest = {'chainId': 5042002, 'asset': USDC, 'owner': '0x00000000000000000000000000000000000000a1',
                 'name': 'Mercurifi Test Vault', 'symbol': 'mtvUSDC', 'seedAssets': 100000000}
     vault = '0x00000000000000000000000000000000000000b2'
-    hashes = ['0x' + c * 64 for c in '123']
+    hashes = ['0x' + c * 64 for c in '1']
     good = {
         'chain': 5042002, 'pending': [],
         'transactions': [
             {'hash': hashes[0], 'transactionType': 'CREATE', 'contractName': CONTRACT, 'contractAddress': vault,
              'arguments': [manifest['asset'], manifest['name'], manifest['symbol'], manifest['owner']],
              'transaction': {'from': '0x00000000000000000000000000000000000000c3'}},
-            {'hash': hashes[1], 'transactionType': 'CALL', 'transaction': {}},
-            {'hash': hashes[2], 'transactionType': 'CALL', 'transaction': {}},
         ],
         'receipts': [{'transactionHash': h, 'status': '0x1', 'contractAddress': vault if i == 0 else None,
                       'blockNumber': '0x10'} for i, h in enumerate(hashes)],
@@ -218,7 +225,11 @@ def self_test():
     assert refused(broadcast={**good, 'chain': 5042}), 'other chain accepted'
     assert refused(broadcast={**good, 'pending': [{}]}), 'pending accepted'
     assert refused(broadcast={**good, 'receipts': []}), 'dry run accepted'
-    assert refused(broadcast=edited(['receipts', 2, 'status'], '0x0')), 'failed seed deposit accepted'
+    assert refused(broadcast=edited(['receipts', 0, 'status'], '0x0')), 'failed deployment accepted'
+    extra = edited(['pending'], [])
+    extra['transactions'].append({'hash': '0x' + '2' * 64, 'transactionType': 'CALL', 'transaction': {}})
+    extra['receipts'].append({'transactionHash': '0x' + '2' * 64, 'status': '0x1', 'blockNumber': '0x10'})
+    assert refused(broadcast=extra), 'broadcast with more than the deployment accepted'
     assert refused(broadcast=edited(['receipts', 0, 'transactionHash'], '0x' + 'd' * 64)), 'unlinked receipt accepted'
     assert refused(broadcast=edited(['transactions', 0, 'arguments', 3], '0x' + '0' * 39 + 'd')), 'owner mismatch'
     assert refused(manifest_={**manifest, 'owner': '0x' + '0' * 40}), 'zero owner accepted'
@@ -227,19 +238,26 @@ def self_test():
 
     chain = {'web3_clientVersion': 'arc/v1', 'eth_chainId': '0x4cef52',
              'eth_getTransactionReceipt': {'status': '0x1', 'contractAddress': vault, 'blockNumber': '0x10'},
-             'eth_getCode': '0x6080', 'asset': '0x' + '0' * 24 + USDC[2:], 'owner': '0x' + '0' * 24 + manifest['owner'][2:]}
+             'eth_getCode': '0x6080', 'asset': '0x' + '0' * 24 + USDC[2:], 'owner': '0x' + '0' * 24 + manifest['owner'][2:],
+             'totalAssets': '0x' + format(manifest['seedAssets'], '064x'), 'ownerShares': '0x' + format(10 ** 14, '064x')}
 
     def fake(answers):
         def call(method, params):
             if method == 'eth_call':
-                return answers['asset' if params[0]['data'] == SEL_ASSET else 'owner']
+                data = params[0]['data']
+                if data.startswith(SEL_BALANCE_OF):
+                    return answers['ownerShares']
+                return answers[{SEL_ASSET: 'asset', SEL_OWNER: 'owner', SEL_TOTAL_ASSETS: 'totalAssets'}[data]]
             return answers[method]
         return call
 
     verify_on_chain(record, fake(chain))
     for change, label in (({'web3_clientVersion': 'anvil/v1.4.3'}, 'anvil rehearsal'), ({'eth_getCode': '0x'}, 'no code'),
                           ({'owner': '0x' + '0' * 64}, 'other owner'), ({'eth_chainId': '0x13b2'}, 'other chain'),
-                          ({'eth_getTransactionReceipt': None}, 'missing receipt')):
+                          ({'eth_getTransactionReceipt': None}, 'missing receipt'),
+                          ({'totalAssets': '0x' + '0' * 64}, 'unseeded vault'),
+                          ({'totalAssets': '0x' + format(manifest['seedAssets'] - 1, '064x')}, 'short seed'),
+                          ({'ownerShares': '0x' + '0' * 64}, 'seed not held by the owner')):
         try:
             verify_on_chain(record, fake({**chain, **change}))
         except Refused:
