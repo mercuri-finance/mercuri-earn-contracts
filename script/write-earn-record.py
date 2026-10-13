@@ -32,6 +32,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -41,6 +42,8 @@ CONTRACT = 'TestLendVault'
 MANIFEST_KEYS = {'chainId', 'asset', 'owner', 'name', 'symbol', 'seedAssets'}
 USDC = '0x3600000000000000000000000000000000000000'
 DEFAULT_RPC = 'https://rpc.testnet.arc.io'
+# Arc's public RPC answers Python's default User-Agent with 403, as the Trade rehearsals found for Anvil.
+RPC_HEADERS = {'Content-Type': 'application/json', 'User-Agent': 'curl/8.7.1'}
 TX_HASH = re.compile(r'^0x[0-9a-fA-F]{64}$')
 SEL_ASSET = '0x38d52e0f'  # asset()
 SEL_OWNER = '0x8da5cb5b'  # owner()
@@ -121,9 +124,12 @@ def rpc_caller(url):
     """A read-only JSON-RPC call function for url."""
     def call(method, params):
         body = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params}).encode()
-        request = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(request, timeout=20) as response:
-            answer = json.loads(response.read())
+        request = urllib.request.Request(url, data=body, headers=RPC_HEADERS)
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                answer = json.loads(response.read())
+        except urllib.error.URLError as error:
+            raise Refused(f'{method}: {error}') from None
         if 'error' in answer:
             raise Refused(f'{method}: RPC error')
         return answer['result']
